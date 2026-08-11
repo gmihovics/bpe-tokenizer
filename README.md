@@ -8,14 +8,35 @@ input*, so you can watch merges happen one at a time.
 ## The pipeline it visualizes
 
 1. **Normalize** — Unicode NFC (+ optional lowercasing).
-2. **Pre-tokenize** — split into word-like chunks (GPT-2-style regex) so merges
-   can't cross word boundaries.
+2. **Pre-tokenize** — split into word-like chunks with a selectable
+   [scheme](#pre-tokenization-schemes) so merges can't cross word boundaries.
 3. **Encode to bytes** — every chunk becomes its raw UTF-8 bytes. Starting from
    bytes means no character is ever "unknown".
 4. **Learn BPE merges** — repeatedly fuse the most frequent adjacent pair of
-   symbols. Interactive scrubber lets you step through each merge.
+   symbols. An interactive scrubber starts before the first merge so you can
+   step forward through each one.
 5. **Final tokens & ids** — remaining symbols become tokens, each mapped to an
    integer id, plus compression stats.
+
+## Pre-tokenization schemes
+
+GPT-2, GPT-4, and GPT-4o all use the **same** byte-level BPE algorithm. The
+publicly documented thing that differs (besides the trained vocabulary) is the
+*pre-tokenization regex* — the rule for splitting text into chunks before
+merging — which genuinely changes where token boundaries land. The dropdown lets
+you swap between them, using the real patterns from OpenAI's open-source
+[`tiktoken`](https://github.com/openai/tiktoken):
+
+- **GPT-2 (r50k_base)** — all consecutive digits stay in one chunk; contraction
+  suffixes match lowercase only.
+- **GPT-3.5 / GPT-4 (cl100k_base)** — groups digits in runs of at most 3
+  (`2024` → `202` + `4`), case-insensitive contractions.
+- **GPT-4o (o200k_base)** — same digit grouping plus a more elaborate rule that
+  splits words on case changes (better for camelCase and non-Latin scripts).
+
+There is intentionally **no Claude preset**: Anthropic doesn't publish Claude's
+tokenizer regex the way OpenAI does, so a faithful version isn't possible and a
+fake one would be misleading.
 
 ## Run it
 
