@@ -155,6 +155,12 @@
   .empty-note { color: var(--muted); font-style: italic; }
   footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
   footer a { color: var(--accent); }
+  .series { margin: 0 0 20px; padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .series-label { color: var(--muted); width: 100%; }
+  .series a { color: var(--accent); text-decoration: none; }
+  .series a:hover { text-decoration: underline; }
+  .series-current { color: var(--text); font-weight: 700; }
+  .series-sep { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -197,6 +203,14 @@
   <div id="output"></div>
 
   <footer>
+    <div class="series">
+      <span class="series-label">A 3-part series on how language models read text:</span>
+      <span class="series-current">1 · Tokenization</span>
+      <span class="series-sep">→</span>
+      <a href="https://gmihovics.github.io/embeddings/" target="_blank" rel="noopener">2 · Embeddings</a>
+      <span class="series-sep">→</span>
+      <a href="https://gmihovics.github.io/transformer/" target="_blank" rel="noopener">3 · Self-Attention</a>
+    </div>
     Built as a learning tool. The tokenizer is plain, commented TypeScript in
     <code>src/tokenizer.ts</code> — read it to see exactly how BPE works. GPT and Claude all use this same
     byte-level BPE algorithm; what differs is the pre-tokenization regex (the schemes above, taken from
