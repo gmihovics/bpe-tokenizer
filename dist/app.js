@@ -3,7 +3,7 @@
    up the page controls. All the tokenization logic lives in tokenizer.ts;
    this file only deals with the DOM.
    ========================================================================= */
-import { tokenize } from "./tokenizer.js";
+import { SCHEMES, tokenize } from "./tokenizer.js";
 const PALETTE = [
     "#1f6feb", "#238636", "#8957e5", "#bb8009",
     "#c9510c", "#1f6f8b", "#a5334f", "#57606a",
@@ -116,7 +116,7 @@ function render(steps) {
     }
     out.innerHTML =
         stepShell(1, "Normalize", "Clean up the raw text. Here we apply Unicode NFC normalization (and optional lowercasing). Real tokenizers keep this minimal so information isn't lost.", normBody) +
-            stepShell(2, "Pre-tokenize", "Split the text into word-like chunks using a regex. Merges are only allowed <i>within</i> a chunk, so a token can never span across, say, a word and the punctuation after it.", chunkBody) +
+            stepShell(2, "Pre-tokenize", `Split the text into word-like chunks using the <b>${esc(steps.scheme.label)}</b> scheme's regex. ${esc(steps.scheme.note)} Merges only ever happen <i>within</i> a chunk, so a token can't span, say, a word and the punctuation after it.`, chunkBody) +
             stepShell(3, "Encode to bytes", "Break every chunk into individual UTF-8 bytes. These 256 possible bytes are the starting alphabet of the vocabulary.", byteBody) +
             stepShell(4, "Learn BPE merges", "Repeatedly find the <b>most frequent adjacent pair</b> of symbols and fuse it into one new symbol. Common sequences like <code>·t → ·th</code> get their own tokens. This is exactly how a BPE vocabulary is trained.", mergeBody) +
             stepShell(5, "Final tokens & ids", "After all merges, whatever symbols remain are the tokens. Each distinct token gets an integer id — the numbers fed into the model.", tokenBody);
@@ -150,15 +150,20 @@ function wireScrubber(history, initialWords) {
     slider.addEventListener("input", () => draw(parseInt(slider.value, 10)));
     prev.addEventListener("click", () => draw(Math.max(0, parseInt(slider.value, 10) - 1)));
     next.addEventListener("click", () => draw(Math.min(history.length, parseInt(slider.value, 10) + 1)));
-    draw(history.length); // start showing the fully-merged state
+    draw(0); // start at the beginning (pure bytes) so you can step forward through each merge
 }
 /* ---- Wire up the page ---------------------------------------------------- */
 function run() {
     const text = el("input").value;
     const numMerges = parseInt(el("merges").value, 10);
     const lowercase = el("lower").checked;
-    render(tokenize(text, { lowercase, numMerges }));
+    const schemeId = el("scheme").value;
+    render(tokenize(text, { lowercase, numMerges, schemeId }));
 }
+// Populate the scheme dropdown from the single source of truth in tokenizer.ts.
+const schemeSelect = el("scheme");
+schemeSelect.innerHTML = SCHEMES.map((s) => `<option value="${s.id}">${s.label}</option>`).join("");
+schemeSelect.addEventListener("change", run);
 el("merges").addEventListener("input", () => {
     el("mergesVal").textContent = el("merges").value;
 });

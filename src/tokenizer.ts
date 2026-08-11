@@ -44,8 +44,59 @@ export interface MergeRecord {
   snapshot: Word[];
 }
 
+/** A selectable pre-tokenization scheme (the part that really differs between
+ *  real tokenizers). All of them feed the same byte-level BPE below. */
+export interface Scheme {
+  id: string;
+  label: string;
+  /** Plain-English note about what makes this scheme distinctive. */
+  note: string;
+  /** The pre-tokenization regex, as a source string (compiled per call). */
+  pattern: string;
+}
+
+/**
+ * The pre-tokenization regexes used by real tokenizers.
+ *
+ * GPT-2/3.5/4/4o all use *byte-level BPE* — the only publicly documented thing
+ * that differs (besides the trained vocab) is this splitting regex. These are
+ * the actual patterns from OpenAI's open-source `tiktoken`, with one mechanical
+ * change: `tiktoken` writes case-insensitive contractions as `(?i:'s|'t|...)`,
+ * an inline flag group not supported by every JS engine, so we expand them to
+ * explicit character classes (e.g. `'[sS]`) — behaviourally identical.
+ *
+ * Anthropic does not publish Claude's tokenizer regex, so there is deliberately
+ * no "Claude" preset here — faking one would be misleading.
+ */
+export const SCHEMES: Scheme[] = [
+  {
+    id: "gpt2",
+    label: "GPT-2 (r50k_base)",
+    note: "The original. A leading space sticks to the following word, and ALL consecutive digits stay in one chunk (\"2024\" is one piece). Contraction suffixes only match lowercase.",
+    pattern:
+      "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+",
+  },
+  {
+    id: "cl100k",
+    label: "GPT-3.5 / GPT-4 (cl100k_base)",
+    note: "Groups digits into runs of at most 3 (\"2024\" → \"202\"+\"4\"), matches contractions case-insensitively, and keeps trailing newlines glued to punctuation.",
+    pattern:
+      "'(?:[sS]|[tT]|[rR][eE]|[vV][eE]|[mM]|[lL][lL]|[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+  },
+  {
+    id: "o200k",
+    label: "GPT-4o (o200k_base)",
+    note: "The newest scheme. Same max-3-digit grouping, plus a more elaborate rule that splits words on case changes — better for camelCase and non-Latin scripts.",
+    pattern:
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+(?:'(?:[sS]|[tT]|[rR][eE]|[vV][eE]|[mM]|[lL][lL]|[dD]))?|[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*(?:'(?:[sS]|[tT]|[rR][eE]|[vV][eE]|[mM]|[lL][lL]|[dD]))?|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+  },
+];
+
+const DEFAULT_SCHEME = SCHEMES[0];
+
 /** Everything the UI needs to render the pipeline, one field per stage. */
 export interface TokenizeResult {
+  scheme: Scheme;
   normalized: string;
   chunks: string[];
   initialWords: Word[];
@@ -58,17 +109,18 @@ export interface TokenizeResult {
 export interface TokenizeOptions {
   lowercase?: boolean;
   numMerges?: number;
+  /** Which pre-tokenization scheme to use (see SCHEMES). Defaults to GPT-2. */
+  schemeId?: string;
 }
 
 // ---- (2) Pre-tokenization -------------------------------------------------
-// A simplified version of GPT-2's regex. It keeps a leading space attached to
-// the following word (that's why real tokenizers have tokens like " token").
-// It splits contractions, letters, numbers, punctuation, and whitespace runs.
-const PRE_TOKEN_RE =
-  /'s|'t|'re|'ve|'m|'ll|'d| ?[\p{L}]+| ?[\p{N}]+| ?[^\s\p{L}\p{N}]+|\s+/gu;
-
-function preTokenize(text: string): string[] {
-  return text.match(PRE_TOKEN_RE) ?? [];
+// Split the text into word-like chunks with the chosen scheme's regex. The
+// regex is compiled fresh each call so the stateful `g`-flag lastIndex can't
+// leak between runs. It keeps a leading space attached to the following word
+// (that's why real tokenizers have tokens like " token").
+function preTokenize(text: string, pattern: string): string[] {
+  const re = new RegExp(pattern, "gu");
+  return text.match(re) ?? [];
 }
 
 // ---- (3) Bytes ------------------------------------------------------------
@@ -137,14 +189,15 @@ function mergeWord(symbols: string[], a: string, b: string): string[] {
  * replay it. `numMerges` controls how many BPE steps we perform.
  */
 export function tokenize(text: string, options: TokenizeOptions = {}): TokenizeResult {
-  const { lowercase = false, numMerges = 50 } = options;
+  const { lowercase = false, numMerges = 50, schemeId } = options;
+  const scheme = SCHEMES.find((s) => s.id === schemeId) ?? DEFAULT_SCHEME;
 
   // (1) Normalize
   let normalized = text.normalize("NFC");
   if (lowercase) normalized = normalized.toLowerCase();
 
   // (2) Pre-tokenize
-  const chunks = preTokenize(normalized);
+  const chunks = preTokenize(normalized, scheme.pattern);
 
   // Group identical chunks together with a frequency count. BPE cares about
   // pair *frequencies*, so counting duplicates once (with a weight) is both
@@ -190,5 +243,5 @@ export function tokenize(text: string, options: TokenizeOptions = {}): TokenizeR
   const vocab = new Map<string, number>();
   for (const t of finalTokens) if (!vocab.has(t)) vocab.set(t, vocab.size);
 
-  return { normalized, chunks, initialWords, mergeHistory, finalTokens, vocab };
+  return { scheme, normalized, chunks, initialWords, mergeHistory, finalTokens, vocab };
 }

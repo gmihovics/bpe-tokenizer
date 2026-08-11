@@ -58,6 +58,13 @@
   .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-top: 14px; }
   .control-group { display: flex; flex-direction: column; }
   input[type="range"] { width: 200px; accent-color: var(--accent); }
+  select {
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 10px; font-size: 14px; font-family: var(--sans);
+    min-width: 240px; cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
   .checkbox-row { display: flex; align-items: center; gap: 8px; }
   .checkbox-row input { accent-color: var(--accent); width: 16px; height: 16px; }
   .checkbox-row label { margin: 0; color: var(--text); }
@@ -157,6 +164,10 @@
     <textarea id="input">The tokenizer took the tokens. Tokenization is token-ization!</textarea>
     <div class="controls">
       <div class="control-group">
+        <label for="scheme">Pre-tokenization scheme</label>
+        <select id="scheme"></select>
+      </div>
+      <div class="control-group">
         <label for="merges">BPE merges to learn: <span id="mergesVal" class="mono accent">50</span></label>
         <input type="range" id="merges" min="0" max="120" value="50" />
       </div>
@@ -174,8 +185,10 @@
 
   <footer>
     Built as a learning tool. The tokenizer is plain, commented TypeScript in
-    <code>src/tokenizer.ts</code> — read it to see exactly how BPE works. Real models (GPT, Claude) use the
-    same algorithm but with a fixed vocabulary of ~100k merges trained on huge corpora, plus a few extra tricks.
+    <code>src/tokenizer.ts</code> — read it to see exactly how BPE works. GPT and Claude all use this same
+    byte-level BPE algorithm; what differs is the pre-tokenization regex (the schemes above, taken from
+    OpenAI's open-source <code>tiktoken</code>) and a fixed vocabulary of ~100k merges trained once on huge
+    corpora. Anthropic doesn't publish Claude's regex, so there's no faithful Claude preset here.
   </footer>
 </div>
 
