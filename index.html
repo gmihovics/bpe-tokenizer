@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BPE Tokenizer Playground</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2333;
+    --border: #2d3748;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-2: #a371f7;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header h1 { font-size: 26px; margin: 0 0 6px; }
+  header p { color: var(--muted); margin: 0 0 24px; max-width: 70ch; }
+  .accent { color: var(--accent); }
+  code, .mono { font-family: var(--mono); }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
+  textarea {
+    width: 100%;
+    min-height: 90px;
+    resize: vertical;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-top: 14px; }
+  .control-group { display: flex; flex-direction: column; }
+  input[type="range"] { width: 200px; accent-color: var(--accent); }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; }
+  .checkbox-row input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .checkbox-row label { margin: 0; color: var(--text); }
+
+  button {
+    background: var(--accent);
+    color: #08111f;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(1.08); }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Pipeline steps */
+  .step { position: relative; padding-left: 44px; margin-bottom: 14px; }
+  .step-num {
+    position: absolute; left: 0; top: 0;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--panel-2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; color: var(--accent);
+  }
+  .step::before {
+    content: ""; position: absolute; left: 14px; top: 30px; bottom: -14px;
+    width: 2px; background: var(--border);
+  }
+  .step:last-child::before { display: none; }
+  .step h3 { margin: 4px 0 4px; font-size: 17px; }
+  .step .desc { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  .step-body {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  /* Chunk / token pills */
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--mono); font-size: 13px; }
+  .pill {
+    padding: 3px 8px; border-radius: 6px; white-space: pre;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .pill.plain { background: var(--panel-2); }
+  .byte { background: #21262d; color: var(--muted); padding: 2px 6px; border-radius: 4px; }
+
+  .symbols { display: flex; flex-wrap: wrap; gap: 10px; }
+  .word-group { display: flex; flex-direction: column; gap: 4px; }
+  .word-label { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .sym-row { display: flex; gap: 3px; }
+  .sym {
+    font-family: var(--mono); font-size: 12px; padding: 3px 6px;
+    border-radius: 4px; background: var(--panel-2); border: 1px solid var(--border);
+    white-space: pre;
+  }
+  .sym.merged { background: #1f6feb33; border-color: var(--accent); color: #cae4ff; }
+
+  /* merge scrubber */
+  .merge-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .merge-controls input[type="range"] { flex: 1; min-width: 160px; }
+  .merge-info { font-size: 14px; }
+  .merge-info b { color: var(--accent); font-family: var(--mono); }
+  .merge-badge {
+    display: inline-block; font-family: var(--mono); font-size: 13px;
+    background: #1f6feb22; border: 1px solid var(--accent); color: #cae4ff;
+    padding: 2px 8px; border-radius: 6px;
+  }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 20px; }
+  .stat .n { font-size: 24px; font-weight: 700; color: var(--accent); font-family: var(--mono); }
+  .stat .l { font-size: 12px; color: var(--muted); }
+
+  .hint { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .empty-note { color: var(--muted); font-style: italic; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🔤 BPE Tokenizer <span class="accent">Playground</span></h1>
+    <p>
+      Type some text and watch it get turned into tokens the same way modern language models do it —
+      using <b>Byte-Pair Encoding</b>. Each stage of the pipeline explains what it's doing and shows the
+      data at that exact moment. The BPE vocabulary is <i>trained live on your input</i> so you can
+      actually watch merges happen.
+    </p>
+  </header>
+
+  <div class="card">
+    <label for="input">Input text</label>
+    <textarea id="input">The tokenizer took the tokens. Tokenization is token-ization!</textarea>
+    <div class="controls">
+      <div class="control-group">
+        <label for="merges">BPE merges to learn: <span id="mergesVal" class="mono accent">50</span></label>
+        <input type="range" id="merges" min="0" max="120" value="50" />
+      </div>
+      <div class="control-group">
+        <div class="checkbox-row">
+          <input type="checkbox" id="lower" />
+          <label for="lower">Lowercase (normalize)</label>
+        </div>
+      </div>
+      <button id="run">Tokenize →</button>
+    </div>
+  </div>
+
+  <div id="output"></div>
+
+  <footer>
+    Built as a learning tool. The tokenizer is plain, commented TypeScript in
+    <code>src/tokenizer.ts</code> — read it to see exactly how BPE works. Real models (GPT, Claude) use the
+    same algorithm but with a fixed vocabulary of ~100k merges trained on huge corpora, plus a few extra tricks.
+  </footer>
+</div>
+
+<script type="module" src="./dist/app.js"></script>
+</body>
+</html>
